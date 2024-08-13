@@ -12,7 +12,6 @@
  */
 
 import { load } from "https://deno.land/std/dotenv/mod.ts";
-import { v4 } from "https://deno.land/std@0.81.0/uuid/mod.ts";
 
 const env = await load();
 
@@ -42,21 +41,22 @@ headers[key] = value;
 const systemPrompt = await Deno.readTextFile("./prompt-class-to-hooks.md");
 
 const body = {
-  "messages": [
+  messages: [
     {
-      "role": "system",
-      "content": systemPrompt.trim(),
+      role: 'system',
+      content: systemPrompt.trim(),
     },
     {
-      "role": "user",
-      "content": fileContent.trim(),
-    }
+      role: 'user',
+      content: fileContent.trim(),
+    },
   ],
   // "model": "moonshot-v1-128k",
   // "max_tokens": 4096 * 3,
-  "model": "gpt-4o",
-  "max_tokens": 4096,
-  "temperature": 0
+  // "model": "gpt-4o",
+  // "max_tokens": 4096,
+  model: 'deepseek-chat',
+  temperature: 0.0,
 };
 
 const options = {
@@ -93,21 +93,23 @@ console.log(resultClone);
 
 console.log(`完成转换，耗时 ${(+new Date() - startTime) / 1000}s`);
 
-async function waitingUserConfirmContent(notes: string): Promise<string> {
-  const tempFileName = `ai-auto-temp-${v4.generate()}.txt`;
-  await Deno.writeTextFile(tempFileName, notes);
-  const process = Deno.run({
-    cmd: ["vi", tempFileName],
-    stdout: "inherit",
-    stderr: "inherit"
-  });
-  await process.status();
-  notes = await Deno.readTextFile(tempFileName);
-  await Deno.remove(tempFileName);
-  return notes;
+const path = inputFile.slice(0, inputFile.lastIndexOf('.'));
+const ext = inputFile.slice(inputFile.lastIndexOf('.') + 1);
+const tempFileName = `${path}.new.${ext}`;
+await Deno.writeTextFile(tempFileName, result.choices[0].message.content);
+
+const process = Deno.run({
+  cmd: ["code", tempFileName],
+  stdout: "inherit",
+  stderr: "inherit"
+});
+
+await process.status();
+
+const answer = await prompt(`请确认转换结果是否正确，如果正确请输入 "y"，否则请输入 "n"：`);
+if (answer?.toLowerCase() === "y") {
+  await Deno.writeTextFile(inputFile, await Deno.readTextFile(tempFileName));
 }
+await Deno.remove(tempFileName);
 
-const output = await waitingUserConfirmContent(result.choices[0].message.content);
-
-await Deno.writeTextFile(inputFile, output);
 Deno.exit(0);
